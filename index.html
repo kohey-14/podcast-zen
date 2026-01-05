@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Podcast Zen</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="theme-color" content="#F8F9FA" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)">
+
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="icon" href="icon.png">
+    <style>
+        /* === Styles === */
+        :root {
+            --bg-color: #F8F9FA; --card-bg: #FFFFFF; --text-color: #333333; --timer-color: #333;
+            --lap-color: #888; --btn-bg: #E4E6EB; --btn-text: #333; --btn-border: #D0D3D8;
+            --accent-color: #FF4B4B; --active-topic-bg: #FFF0F0; --border-color: #ddd;
+            --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom);
+        }
+        [data-theme="dark"] {
+            --bg-color: #121212; --card-bg: #1E1E1E; --text-color: #E0E0E0; --timer-color: #FF4B4B;
+            --lap-color: #888; --btn-bg: #2C2C2C; --btn-text: #EEE; --btn-border: #444;
+            --accent-color: #FF4B4B; --active-topic-bg: #3A2020; --border-color: #333;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Yu Gothic", sans-serif;
+            background-color: var(--bg-color); color: var(--text-color); margin: 0;
+            padding: calc(10px + var(--safe-top)) 15px calc(20px + var(--safe-bottom)) 15px;
+            display: flex; justify-content: center; min-height: 100vh; overscroll-behavior-y: none;
+        }
+        .container { width: 100%; max-width: 600px; display: flex; flex-direction: column; height: 100%; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+        /* タイトルを少し控えめで親しみやすいフォント感に */
+        .app-title { font-weight: 800; font-size: 1.1rem; color: #888; letter-spacing: 0.5px; }
+        .header-options { display: flex; gap: 8px; }
+        .icon-btn { background: var(--card-bg); border: 1px solid var(--btn-border); color: var(--text-color); width: 32px; height: 32px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+        .on-air-lamp {
+            font-size: 0.7rem; font-weight: 900; letter-spacing: 2px; padding: 4px 12px; border-radius: 4px; margin: 0 auto 10px; width: fit-content;
+            color: #555; border: 2px solid #555; opacity: 0.3; transition: all 0.3s;
+        }
+        .on-air-lamp.active { color: #FF4B4B; border-color: #FF4B4B; opacity: 1; background: rgba(255, 75, 75, 0.1); box-shadow: 0 0 15px rgba(255, 75, 75, 0.4); }
+
+        .dashboard {
+            background: var(--card-bg); border-radius: 16px; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            margin-bottom: 15px; border: 1px solid var(--border-color); position: relative;
+        }
+        .timer-group { text-align: center; position: relative; z-index: 2; }
+        .lap-timer-label { font-size: 0.7rem; color: var(--lap-color); font-weight: bold; letter-spacing: 1px; margin-bottom: -5px; }
+        .lap-timer { font-family: 'Courier New', monospace; font-size: 2rem; font-weight: 700; color: var(--lap-color); letter-spacing: -1px; margin-bottom: 5px; font-variant-numeric: tabular-nums; }
+        .main-timer { font-family: 'Courier New', monospace; font-size: 4.5rem; font-weight: 800; color: var(--timer-color); line-height: 0.9; letter-spacing: -3px; font-variant-numeric: tabular-nums; }
+        .vis-canvas { position: absolute; bottom: 10px; left: 0; width: 100%; height: 60px; opacity: 0.15; pointer-events: none; mix-blend-mode: multiply; }
+        [data-theme="dark"] .vis-canvas { mix-blend-mode: screen; opacity: 0.3; }
+
+        /* 16-Button Grid */
+        .sampler-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 15px;
+        }
+        .pad-btn {
+            background: var(--btn-bg); border: 1px solid var(--btn-border); color: var(--text-color);
+            border-radius: 6px; height: 50px; cursor: pointer;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: transform 0.05s, background 0.1s;
+            box-shadow: 0 2px 0 rgba(0,0,0,0.1);
+        }
+        .pad-btn:active { transform: translateY(2px); box-shadow: none; background: var(--accent-color); color: white; border-color: var(--accent-color); }
+        .pad-icon { font-size: 1.2rem; line-height: 1.2; }
+        .pad-label { font-size: 0.6rem; font-weight: bold; opacity: 0.8; margin-top: 1px; }
+
+        .controls { display: flex; gap: 10px; margin-bottom: 20px; }
+        .ctrl-btn {
+            flex: 1; height: 55px; border-radius: 12px; font-size: 1rem; font-weight: bold; cursor: pointer;
+            background-color: var(--btn-bg); color: var(--btn-text); border: 1px solid var(--btn-border);
+            display: flex; justify-content: center; align-items: center; letter-spacing: 0.5px;
+            box-shadow: 0 3px 0 rgba(0,0,0,0.1); transition: all 0.1s;
+        }
+        .ctrl-btn:active:not(:disabled) { transform: translateY(3px); box-shadow: none; }
+        .ctrl-btn.rec-btn:active:not(:disabled) { background: var(--accent-color); color: white; border-color: var(--accent-color); }
+        .ctrl-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; transform: translateY(3px); }
+
+        .topic-list { list-style: none; padding: 0; margin: 0; padding-bottom: 40px; }
+        .topic-item {
+            background-color: var(--card-bg); border: 1px solid var(--border-color); padding: 12px 15px;
+            border-radius: 10px; margin-bottom: 8px; display: flex; align-items: center;
+            justify-content: space-between; transition: all 0.2s; cursor: pointer;
+        }
+        .topic-item.active { border-color: var(--accent-color); background-color: var(--active-topic-bg); box-shadow: 0 0 0 2px var(--accent-color) inset; transform: scale(1.01); }
+        .topic-item.done { opacity: 0.5; background: transparent; border-style: dashed; }
+        .topic-item.done span { text-decoration: line-through; }
+        .custom-checkbox { width: 22px; height: 22px; border: 2px solid #ccc; border-radius: 50%; margin-right: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+        .topic-item.done .custom-checkbox { background: #888; border-color: #888; }
+        .topic-item.done .custom-checkbox::after { content: '✓'; color: white; font-size: 12px; }
+        .delete-btn { background: none; border: none; color: #ccc; padding: 8px; font-size: 1.1rem; }
+
+        .topic-input-group { display: flex; gap: 8px; margin-bottom: 15px; }
+        input[type="text"] { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid var(--btn-border); background: var(--card-bg); color: var(--text-color); font-size: 1rem; outline: none; }
+        .add-btn { width: 50px; border-radius: 8px; background: var(--btn-bg); border: 1px solid var(--btn-border); font-weight: bold; cursor: pointer; color: var(--text-color); }
+
+        .tabs { display: flex; margin-bottom: 15px; background: var(--btn-bg); padding: 4px; border-radius: 10px; }
+        .tab { flex: 1; text-align: center; padding: 8px 0; cursor: pointer; font-weight: 600; color: #888; border-radius: 8px; font-size: 0.9rem; }
+        .tab.active { background: var(--card-bg); color: var(--text-color); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        textarea { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--btn-border); background: var(--card-bg); color: var(--text-color); font-size: 1rem; resize: none; outline: none; }
+        
+        .code-preview { background-color: #2d2d2d; color: #ccc; padding: 15px; border-radius: 8px; font-family: monospace; margin-top: 10px; font-size: 13px; white-space: pre-wrap; display: none; word-break: break-all; }
+        .action-btn { margin-top: 15px; padding: 14px; width: 100%; border-radius: 10px; border: none; cursor: pointer; font-weight: bold; color: white; font-size: 1rem; }
+        .btn-green { background-color: #10B981; }
+        .btn-red { background-color: #EF4444; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <div class="app-title">Podcast Zen</div>
+        <div class="header-options">
+            <button class="icon-btn" id="soundToggle" onclick="toggleSound()">🔊</button>
+            <button class="icon-btn" onclick="toggleTheme()">🌙</button>
+        </div>
+    </div>
+
+    <div class="on-air-lamp" id="onAirLamp">ON AIR</div>
+
+    <div class="dashboard">
+        <canvas id="visCanvas" class="vis-canvas"></canvas>
+        <div class="timer-group">
+            <div class="lap-timer-label">CURRENT TOPIC</div>
+            <div class="lap-timer" id="lapDisplay">00:00</div>
+            <div class="main-timer" id="totalDisplay">00:00</div>
+        </div>
+    </div>
+
+    <div class="sampler-grid">
+        <button class="pad-btn" onclick="playFile('title')"><span class="pad-icon">🎬</span><span class="pad-label">タイトル</span></button>
+        <button class="pad-btn" onclick="playFile('question_1')"><span class="pad-icon">❓</span><span class="pad-label">出題</span></button>
+        <button class="pad-btn" onclick="playFile('right_answer')"><span class="pad-icon">⭕</span><span class="pad-label">正解</span></button>
+        <button class="pad-btn" onclick="playFile('wrong_answer')"><span class="pad-icon">❌</span><span class="pad-label">不正解</span></button>
+
+        <button class="pad-btn" onclick="playFile('cheers_1')"><span class="pad-icon">🙌</span><span class="pad-label">歓声1</span></button>
+        <button class="pad-btn" onclick="playFile('cheers_2')"><span class="pad-icon">👏</span><span class="pad-label">歓声2</span></button>
+        <button class="pad-btn" onclick="playFile('impact_sound')"><span class="pad-icon">💥</span><span class="pad-label">衝撃</span></button>
+        <button class="pad-btn" onclick="playFile('level_up')"><span class="pad-icon">🆙</span><span class="pad-label">LvUP</span></button>
+
+        <button class="pad-btn" onclick="playFile('gong_begining')"><span class="pad-icon">🔔</span><span class="pad-label">ゴング始</span></button>
+        <button class="pad-btn" onclick="playFile('gong_end')"><span class="pad-icon">🔕</span><span class="pad-label">ゴング終</span></button>
+        <button class="pad-btn" onclick="playFile('trumpet_1')"><span class="pad-icon">🎺</span><span class="pad-label">ラッパ1</span></button>
+        <button class="pad-btn" onclick="playFile('trumpet_2')"><span class="pad-icon">📯</span><span class="pad-label">ラッパ2</span></button>
+
+        <button class="pad-btn" onclick="playFile('dj_1')"><span class="pad-icon">🎧</span><span class="pad-label">DJ</span></button>
+        <button class="pad-btn" onclick="playFile('peep')"><span class="pad-icon">🤬</span><span class="pad-label">ピー</span></button>
+        <button class="pad-btn" onclick="playFile('puff')"><span class="pad-icon">💨</span><span class="pad-label">パフ</span></button>
+        <button class="pad-btn" onclick="playFile('rember')"><span class="pad-icon">🤔</span><span class="pad-label">回想</span></button>
+    </div>
+
+    <div class="controls">
+        <button class="ctrl-btn rec-btn" id="btnRec" onclick="handleRec()">● REC</button>
+        <button class="ctrl-btn" id="btnPause" onclick="handlePause()" disabled>PAUSE</button>
+        <button class="ctrl-btn" id="btnLap" onclick="handleLapReset()" disabled>LAP ↻</button>
+        <button class="ctrl-btn" id="btnReset" onclick="handleReset()" disabled>STOP ■</button>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('topics')">Topics</div>
+        <div class="tab" onclick="switchTab('memo')">Memo</div>
+        <div class="tab" onclick="switchTab('script')">Script</div>
+    </div>
+
+    <div id="tab-topics" class="tab-content active">
+        <div class="topic-input-group">
+            <input type="text" id="newTopicInput" placeholder="New Topic..." onkeypress="handleEnter(event)">
+            <button class="add-btn" onclick="addTopic()">＋</button>
+        </div>
+        <ul class="topic-list" id="topicList"></ul>
+    </div>
+    <div id="tab-memo" class="tab-content">
+        <textarea id="freeMemo" style="height: 300px;" placeholder="Show notes..." oninput="saveData()"></textarea>
+    </div>
+    <div id="tab-script" class="tab-content">
+        <textarea id="scriptArea" style="height: 250px;" placeholder="Draft..." oninput="saveData()"></textarea>
+        <button class="action-btn btn-green" onclick="generateCode()">🔄 Code Export</button>
+        <div id="codePreviewArea" style="display:none; padding-bottom: 50px;">
+            <p style="margin:15px 0 5px; font-weight:bold;">Markdown:</p><div class="code-preview" id="mdOutput"></div>
+            <p style="margin:15px 0 5px; font-weight:bold;">HTML:</p><div class="code-preview" id="htmlOutput"></div>
+            <button class="action-btn btn-red" onclick="closeCode()">Close Output</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // === State ===
+    let startTime = null;
+    let accumulatedTime = 0;
+    let lapStartTime = null;
+    let accumulatedLapTime = 0;
+    let timerInterval = null;
+    let isRecording = false;
+    let isSoundOn = true;
+    let activeTopicIndex = -1;
+
+    // === Audio System ===
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    function createNoiseBuffer() {
+        const bufferSize = audioCtx.sampleRate * 2;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        return buffer;
+    }
+    const noiseBuffer = createNoiseBuffer();
+
+    function playTone(freq, type, duration, delay=0, vol=0.1) {
+        if (!isSoundOn) return;
+        if(audioCtx.state === 'suspended') audioCtx.resume();
+        const startT = audioCtx.currentTime + delay;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, startT);
+        gain.gain.setValueAtTime(0, startT);
+        gain.gain.linearRampToValueAtTime(vol, startT + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, startT + duration);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(startT); osc.stop(startT + duration);
+    }
+    
+    function playNoise(duration, vol=0.1) {
+        if (!isSoundOn) return;
+        const src = audioCtx.createBufferSource();
+        src.buffer = noiseBuffer;
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = "bandpass"; filter.frequency.value = 1000;
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        src.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+        src.start(); src.stop(audioCtx.currentTime + duration);
+    }
+
+    // System Sounds (Synthesized)
+    function soundRec() { playNoise(0.3, 0.1); playTone(440, 'sine', 0.4); setTimeout(() => playTone(880, 'sine', 0.4), 100); }
+    function soundPause() { playTone(100, 'triangle', 0.3); }
+    function soundLap() { playTone(800, 'sine', 0.1); }
+
+    // ★ Real File Playback (Full 16 Files)
+    function playFile(filename) {
+        if (!isSoundOn) return;
+        // soundsフォルダの中のファイルを再生
+        const audio = new Audio('sounds/' + filename + '.mp3');
+        audio.play().catch(e => {
+            console.log('Audio Play Error:', e);
+            playTone(400, 'square', 0.1);
+        });
+    }
+
+    // === Visualizer ===
+    const canvas = document.getElementById('visCanvas');
+    const ctx = canvas.getContext('2d');
+    let animationId;
+    function resizeCanvas() { canvas.width = canvas.parentElement.offsetWidth; canvas.height = 60; }
+    window.addEventListener('resize', resizeCanvas);
+    function drawVisualizer() {
+        if (!isRecording) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const isDark = document.body.getAttribute('data-theme') === 'dark';
+        ctx.fillStyle = isDark ? '#FF4B4B' : '#555';
+        const bars = 30; const gap = 4; const width = (canvas.width - (bars*gap)) / bars;
+        for(let i=0; i<bars; i++) {
+            const h = Math.random() * canvas.height * 0.9;
+            ctx.fillRect(i * (width + gap), canvas.height - h, width, h);
+        }
+        setTimeout(() => { animationId = requestAnimationFrame(drawVisualizer); }, 80);
+    }
+
+    // === Logic ===
+    function handleRec() { if(!isRecording) { startRecording(); soundRec(); } }
+    function handlePause() { if(isRecording) { pauseRecording(); soundPause(); } }
+    function handleReset() {
+        if(confirm("Stop & Reset?")) {
+            pauseRecording(); accumulatedTime = 0; startTime = null; accumulatedLapTime = 0; lapStartTime = null; activeTopicIndex = -1;
+            renderTopics(); updateDisplays(); updateUI();
+        }
+    }
+    function handleLapReset() {
+        if(isRecording) lapStartTime = Date.now(); accumulatedLapTime = 0; soundLap(); updateDisplays();
+    }
+    function startRecording() {
+        startTime = Date.now(); lapStartTime = Date.now(); isRecording = true;
+        timerInterval = setInterval(updateLoop, 100);
+        document.getElementById('onAirLamp').classList.add('active');
+        resizeCanvas(); drawVisualizer(); updateUI();
+    }
+    function pauseRecording() {
+        clearInterval(timerInterval);
+        accumulatedTime += Date.now() - startTime; accumulatedLapTime += Date.now() - lapStartTime;
+        isRecording = false;
+        document.getElementById('onAirLamp').classList.remove('active');
+        cancelAnimationFrame(animationId); ctx.clearRect(0,0,canvas.width,canvas.height); updateUI();
+    }
+    function updateLoop() {
+        const now = Date.now();
+        document.getElementById('totalDisplay').innerText = formatTime(accumulatedTime + (now - startTime));
+        document.getElementById('lapDisplay').innerText = formatTime(accumulatedLapTime + (now - lapStartTime));
+    }
+    function updateDisplays() {
+        document.getElementById('totalDisplay').innerText = formatTime(accumulatedTime);
+        document.getElementById('lapDisplay').innerText = formatTime(accumulatedLapTime);
+    }
+    function formatTime(ms) {
+        const totalSec = Math.floor(ms / 1000);
+        const m = Math.floor(totalSec / 60).toString().padStart(2, '0');
+        const s = (totalSec % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    }
+    function updateUI() {
+        document.getElementById('btnRec').disabled = isRecording;
+        document.getElementById('btnPause').disabled = !isRecording;
+        document.getElementById('btnLap').disabled = !isRecording;
+        document.getElementById('btnReset').disabled = (accumulatedTime === 0 && !isRecording);
+    }
+
+    // === Topics ===
+    function addTopic() {
+        const input = document.getElementById('newTopicInput');
+        const text = input.value.trim();
+        if(text) {
+            const topics = getTopicsFromDOM(); topics.push({ text: text, done: false });
+            renderTopics(topics); input.value = ""; saveData();
+        }
+    }
+    function getTopicsFromDOM() {
+        const topics = [];
+        document.querySelectorAll('.topic-item').forEach(el => {
+            topics.push({ text: el.querySelector('.topic-text').innerText, done: el.classList.contains('done') });
+        });
+        return topics;
+    }
+    function renderTopics(data = null) {
+        const topics = data || getTopicsFromDOM();
+        const list = document.getElementById('topicList'); list.innerHTML = "";
+        topics.forEach((t, i) => {
+            const li = document.createElement('li');
+            const isActive = (i === activeTopicIndex);
+            li.className = `topic-item ${t.done ? 'done' : ''} ${isActive ? 'active' : ''}`;
+            li.innerHTML = `
+                <div style="display:flex; align-items:center; flex:1;" onclick="clickTopic(${i})">
+                    <div class="custom-checkbox"></div><span class="topic-text">${t.text}</span>
+                </div>
+                <button class="delete-btn" onclick="deleteTopic(event, this)">✕</button>
+            `;
+            list.appendChild(li);
+        });
+    }
+    function clickTopic(index) {
+        if(activeTopicIndex === index) { toggleDone(index); } else { activeTopicIndex = index; handleLapReset(); renderTopics(); }
+        saveData();
+    }
+    function toggleDone(index) {
+        const topics = getTopicsFromDOM(); topics[index].done = !topics[index].done;
+        if(topics[index].done && activeTopicIndex === index) activeTopicIndex = -1;
+        renderTopics(topics);
+    }
+    function deleteTopic(e, btn) { e.stopPropagation(); btn.closest('li').remove(); activeTopicIndex = -1; renderTopics(); saveData(); }
+    function handleEnter(e) { if(e.key === 'Enter') addTopic(); }
+
+    // === Utils ===
+    function toggleSound() { isSoundOn = !isSoundOn; document.getElementById('soundToggle').innerText = isSoundOn ? '🔊' : '🔇'; localStorage.setItem('soundSetting', isSoundOn); }
+    function toggleTheme() { 
+        const next = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.body.setAttribute('data-theme', next); localStorage.setItem('theme', next);
+    }
+    function switchTab(name) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        const idx = name==='topics'?0:name==='memo'?1:2;
+        document.querySelectorAll('.tab')[idx].classList.add('active');
+        document.getElementById(`tab-${name}`).classList.add('active');
+    }
+    function generateCode() {
+        const text = document.getElementById('scriptArea').value;
+        if (!text.trim()) return alert("テキストを入力してください");
+        const lines = text.split('\n').filter(l => l.trim() !== "");
+        document.getElementById('mdOutput').innerText = lines.map(l => `- ${l.trim()}`).join('\n');
+        document.getElementById('htmlOutput').innerText = "<ul>\n" + lines.map(l => `  <li>${l.trim()}</li>`).join('\n') + "\n</ul>";
+        document.getElementById('codePreviewArea').style.display = 'block';
+        document.getElementById('codePreviewArea').scrollIntoView({behavior: "smooth"});
+    }
+    function closeCode() { document.getElementById('codePreviewArea').style.display = 'none'; }
+    
+    function saveData() {
+        const data = { topics: getTopicsFromDOM(), memo: document.getElementById('freeMemo').value, script: document.getElementById('scriptArea').value };
+        localStorage.setItem('podcastZenData_v4', JSON.stringify(data));
+    }
+    function loadData() {
+        if(localStorage.getItem('theme')) document.body.setAttribute('data-theme', localStorage.getItem('theme'));
+        const savedSound = localStorage.getItem('soundSetting');
+        if(savedSound !== null) { isSoundOn = (savedSound === 'true'); document.getElementById('soundToggle').innerText = isSoundOn ? '🔊' : '🔇'; }
+        const json = localStorage.getItem('podcastZenData_v4');
+        if(json) {
+            const data = JSON.parse(json);
+            if(data.topics) renderTopics(data.topics);
+            if(data.memo) document.getElementById('freeMemo').value = data.memo;
+            if(data.script) document.getElementById('scriptArea').value = data.script;
+        }
+        resizeCanvas();
+    }
+    document.addEventListener('DOMContentLoaded', loadData);
+</script>
+</body>
+</html>
